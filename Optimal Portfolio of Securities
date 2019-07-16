@@ -1,0 +1,298 @@
+%-------------------Portfolio Selection-----------------------------------% 
+%Project by Namratha Prabhu/Created on 12/04/2017
+%--------------------------------------------------------------------------
+%Aim is to find an optimal portfolio of securities where return is maximized 
+%and the variance is minimized.
+%--------------------------------------------------------------------------
+
+%Consider stocks A, B, C and D listed in the stock market having returns over a period of 10 years as in the spreadsheet
+StockData = xlsread('Stock market data Namratha Prabhu');
+
+%Storing the proportion of investor's total money that is invested in all 4 securities
+x = zeros(4,1);
+x1 = x(1,1); %Proportion of the money invested in security 1
+x2 = x(2,1); %Proportion of the money invested in security 2
+x3 = x(3,1); %Proportion of the money invested in security 3
+x4 = x(4,1); %Proportion of the money invested in security 4
+
+%Period of time in years that the return is analyzed
+T = 10;
+
+%Expected value of securities
+%-----------------------------------------------------------------------
+
+%Initialize the expected value of securities 
+mu = [1;1;1;1];
+
+%Calculate geometric mean for assest i
+for j = 1:4
+    for i = 1:10
+        mu(j) = mu(j) * (1 + StockData(i,j));
+    end
+    mu(j) = (mu(j)^(1/T)) - 1;
+end
+
+%Measure of risk associated with each asset
+%-------------------------------------------------------------------------
+        
+%Calculate the covariance matrix of the returns of the securities Si and Sj 
+variance = zeros(4,4);
+summation = 0;
+summation1 = 0;
+summation2 = 0;
+
+k = 1;
+for j = 1:3
+    for i = 1:10
+    summation = summation + (StockData(i,j)-mu(j))*(StockData(i,j+1)-mu(j+1));
+    end
+       variance(k,k+1) = (1/(T-1))*summation;
+       variance(k+1,k) = variance(k,k+1);
+       k = k+1;
+       summation = 0;
+end
+
+k=1;
+for j = 1:2
+    for i = 1:10
+        summation1 = summation1 + (StockData(i,j)-mu(j))*(StockData(i,j+2)-mu(j+2));
+    end
+       variance(k,k+2) = (1/(T-1))*summation1;
+       variance(k+2,k) = variance(k,k+2);
+       k = k+1;
+       summation1 = 0;
+end
+
+for i = 1:10
+    summation2 = summation2 + (StockData(i,1)-mu(1))*(StockData(i,4)-mu(4));
+end
+ variance(1,4) = (1/(T-1))*summation2;
+ variance(4,1) = variance(1,4);
+
+ %To find the diagonal elements (variance) of the covariance matrix
+for i = 1:4
+    for j = 1:10
+        variance(i,i) = variance(i,i) + ((StockData(j,i) - mu(i))^2)/(T-1);
+    end
+end
+        
+%Function definition for risk
+%-----------------------------------------------------------------------
+f1 = (1/2)*transpose(x)*variance*x;
+
+%Function definition for return
+%------------------------------------------------------------------------
+assetReturn = 0;
+for i = 1:4
+    assetReturn = assetReturn + mu(i) * x(i,1);
+end
+f2 = assetReturn;
+
+%Our objective is to maximize returns but since we are minimzing this multi-objective problem, 
+%we take the negative of the return function
+%----------------------------------------------------------------------------------------------
+f2 = -f2;
+
+%-------------------------------------------------------------------------------------------------------
+%Assigning weights to each of the objective function. Since the aim to maximize return and minimize risk, 
+%we initially assign equal weights for each function
+%--------------------------------------------------------------------------------------------------------
+alpha1 = 1;
+alpha2 = 1;
+
+f1 = alpha1*f1;
+f2 = alpha2*f2;
+
+%Constraints of the problem:
+%x1 + x2 + x3 + x4 = 1; %The proportion invested in each stock should all add upto 1
+  %Non-negativity constraints:
+   %x1 >= 0; 
+   %x2 >= 0; 
+   %x3 >= 0; 
+   %x4 >= 0; 
+   
+%Rewriting the constraints
+ceq = x1 + x2 + x3 + x4 - 1;
+c1 = -x1;
+c2 = -x2;
+c3 = -x3;
+c4 = -x4;
+
+%-------------------------------------------------------------------------------
+%Converting the above constrained problem into an unconstrained problem and
+%using the Exterior Penalty Method to solve for optimal solution
+%-------------------------------------------------------------------------------
+
+%Unconstrained Penalized function to be minimized
+syms x1 x2 x3 x4
+x = [x1;x2;x3;x4];
+
+%Rewriting functions for risk and return
+%------------------------------------------
+
+f1 = (1/2)*transpose(x)*variance*x;
+
+assetReturn = 0;
+for i = 1:4
+    assetReturn = assetReturn + mu(i) * x(i,1);
+end
+f2 = assetReturn;
+
+e = 10^-8;%Convergence limits
+z = [0,0;0,0]; %to check if Hessian is greater than 0 for minimum point
+
+%to store in a table for output
+    alphar1 = zeros(3,1);
+    alphar2 = zeros(3,1);
+    result1 = zeros(3,1);
+    result2 = zeros(3,1);
+    result3 = zeros(3,1);
+    result4 = zeros(3,1);
+    Minimum_value_return = zeros(3,1);
+    Minimum_value_risk = zeros(3,1);
+    
+    
+%Main loop (runs for 3 iterations)
+disp('We shall compare the options by assigning different pair of weights THREE times to EACH objective function - one for risk and one for return')
+disp('Assigning weights as 0.5, 0.8, 0.1 for alpha1(risk weightage) and 0.5, 0.2, 0.9 for alpha2(return weightsge) to check for Scenario 1 : equal weightage, Scenario 2: more weightage to risk and Scenario 3 :more weightage to return')
+
+for iter = 1:3
+    if iter == 1 %Scenario 1: Equal weightage given to risk and return
+        alpha1 = 0.5;
+        alpha2 = 0.5;
+    elseif iter == 2 %Scenario 2: More weightage given to risk over return
+        alpha1 = 0.8;
+        alpha2 = 0.2;
+    elseif iter == 3 %Scenario 3: More weightage given to return over risk
+        alpha1 = 0.1;
+        alpha2 = 0.9;
+    end
+    %Initialize penalty parameter: p
+    p = 1; 
+    
+    %---------------------------------------------------------------------------------------------------------
+    %Starting with a relatively small value for the penalty parameter and initial point in the infeasible region
+    %to assure no steep valleys are present in the initial optimization
+    %------------------------------------------------------------------------------------------------------------
+
+    %Initial proportion selection (starting proportions assumed to be infeasible)
+    x1 = -1; x2 = 0; x3 = -1; x4 = 0; %non-negativity constraints are violated with these values
+    m1 = x1 ; m2 = x2; m3 = x3 ; m4 = x4;
+    
+    H_val = [0,0;0,0]; %Initial value of Hessian
+    
+for  y = 1:20
+    while (~((m1 + m2 + m3 + m4) == 1)) | m1 < 0 | m2 < 0 | m3 < 0 | m4 < 0 | H_val < z 
+        
+            %For equality constraints, taking penalty function as square function        
+            constraint = ceq^2;
+
+            syms x1 x2 x3 x4
+            ceq = x1 + x2 + x3 + x4 - 1;
+            c1 = -x1;
+            c2 = -x2;
+            c3 = -x3;
+            c4 = -x4;
+            if myPenaltyFunction(subs(c1,x1,m1)) == 1 
+                constraint = constraint + c1^2;
+            elseif myPenaltyFunction(subs(c1,x1,m1)) == 0
+                constraint = constraint + 0;
+            end
+
+            if myPenaltyFunction(subs(c2,x2,m2)) == 1 
+                constraint = constraint + c2^2;
+            elseif myPenaltyFunction(subs(c2,x2,m2)) == 0
+                constraint = constraint + 0;
+            end
+
+            if myPenaltyFunction(subs(c3,x3,m3)) == 1 
+                constraint = constraint + c3^2;
+            elseif myPenaltyFunction(subs(c3,x3,m3)) == 0
+                constraint = constraint + 0;
+            end
+
+           if myPenaltyFunction(subs(c4,x4,m4)) == 1 
+                constraint = constraint + c4^2;
+            elseif myPenaltyFunction(subs(c4,x4,m4)) == 0
+                constraint = constraint + 0;
+           end
+
+           f = alpha1*(1/2)*transpose(x)*variance*x + alpha2*(-assetReturn) + p* constraint;   
+            %Storing previous values
+            prev1 = m1;
+            prev2 = m2;
+            prev3 = m3;
+            prev4 = m4;
+
+            %Partial derivatives of function
+            J = jacobian(f,[x1,x2,x3,x4]);
+
+            %Equating the partial derivatives to 0 and finding initial values
+            %for x1, x2, x3, x4
+            %Defining equations
+            eqn = [J(1,1) == 0; J(1,2) == 0; J(1,3) == 0; J(1,4) == 0];
+
+            %Solving the equations for x1, x2, x3 and x4
+            [X1,X2,X3,X4] = vpasolve(eqn,[x1,x2,x3,x4]);       
+            min = double(subs(f,[x1,x2,x3,x4],[X1(1,1),X2(1,1),X3(1,1),X4(1,1)]));
+            m1 = double(X1(1,1));
+            m2 = double(X2(1,1));
+            m3 = double(X3(1,1));
+            m4 = double(X4(1,1));
+            for i = 1:size([X1,X2,X3,X4])
+                if double(subs(f,[x1,x2,x3,x4],[X1(i,1),X2(i,1),X3(i,1),X4(i,1)])) < min
+                    min = double(subs(f,[x1,x2,x3,x4],[X1(i,1),X2(i,1),X3(i,1),X4(i,1)]));
+                    m1 = double(X1(i,1));
+                    m2 = double(X2(i,1));
+                    m3 = double(X3(i,1));
+                    m4 = double(X4(i,1));
+                    break;
+                end
+            end
+
+            %Hessian of the function
+            H = hessian(f);
+
+            %Value of hessian at x1 and x2
+            H_val = subs(H,[x1,x2,x3,x4],[m1,m2,m3,m4]);
+            H_val = double(H_val);
+                   
+            if (subs(f,[x1,x2,x3,x4],[prev1,prev2,prev3,prev4]) - subs(f,[x1,x2,x3,x4],[m1,m2,m3,m4]))/subs(f,[x1,x2,x3,x4],[prev1,prev2,prev3,prev4]) <= e
+                break;
+            else    
+                p = p * 10;  %increment penalty parameter
+            end    
+    end
+end
+    alphar1(iter,1) = alpha1;
+    alphar2(iter,1) = alpha2;
+    result1(iter,1) = m1;
+    result2(iter,1) = m2;
+    result3(iter,1) = m3;
+    result4(iter,1) = m4;
+    x1 = m1;
+    x2 = m2;
+    x3 = m3;
+    x4 = m4;
+    syms x1 x2 x3 x4
+    Minimum_value_return(iter,1) = vpa(subs(f2,[x1,x2,x3,x4],[m1,m2,m3,m4])); 
+    Minimum_value_risk(iter,1) = vpa(subs(f1,[x1,x2,x3,x4],[m1,m2,m3,m4]));
+
+end
+
+
+%Table showing various proportions for 3 different pairs of weights applied
+%---------------------------------------------------------------------------
+T = table(alphar1,alphar2,result1,result2,result3,result4,Minimum_value_return,Minimum_value_risk);
+T.Properties.VariableNames = {'Weight_assigned_for_risk','Weight_assigned_for_return','Proportion_invested_in_A','Proportion_invested_in_B','Proportion_invested_in_C','Proportion_invested_in_D','Optimal_value_for_return','Optimal_value_for_risk'}
+
+%Penalty function for inequality constraint is defined below:
+%--------------------------------------------------------------------------
+function q = myPenaltyFunction(w)  
+    if w == 0 || w < 0
+        q = 0;  %If constraint is satisfied, return the same value
+    else
+        q = 1; %If the costraint is not satisfied, impose a heavy penalty by taking square of the constraint
+    end
+end
+    
